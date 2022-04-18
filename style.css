@@ -1,0 +1,24 @@
+html {
+  margin: 0;
+  padding: 0;
+  background-color: white;
+  color: #222;
+  position: relative;
+  overflow-y: auto;
+  cursor: default;
+}
+
+body {
+  font-size: large;
+  font-family: sans-serif;
+  max-width: 900px;
+  margin: auto;
+  padding: 1rem;
+  line-height: 1.5;
+  overflow: visible;
+}
+
+.print-char {
+  position: relative;
+  /* transition: all 0.2s ease-out; */
+}
