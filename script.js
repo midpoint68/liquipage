@@ -19,7 +19,7 @@ window.addEventListener("load", ()=>{
       }
 
       // Add particle
-      const particle = new Particle({x: 0, y: 0, radius: 1, data: span});
+      const particle = new Particle({x: 0, y: 0, radius: 1, data: { elem: span, vel: { x: 0, y: 0 } }});
       particles.push(particle);
       pocket.put(particle);
 
@@ -38,7 +38,7 @@ window.addEventListener("load", ()=>{
 let searchRadius = 100;
 const onResize = () => {
   for(const particle of particles) {
-    const bb = particle.data.getBoundingClientRect();
+    const bb = particle.data.elem.getBoundingClientRect();
     const x = bb.left + window.scrollX;
     const y = bb.top + window.scrollY;
     const radius = Math.sqrt((bb.width * bb.width) + (bb.height * bb.height)) / 2;
@@ -50,59 +50,88 @@ window.addEventListener("resize", onResize);
 
 let moving = false;
 let affectedChars = new Set();
+let lastPos;
+let lastMouseMove;
 document.addEventListener("mousemove", (e) => {
   if(!moving) {
     moving = true;
     requestAnimationFrame(()=>{
 
-      // Search for affected chars
-      affectedChars = pocket.search(searchRadius, {x: e.pageX, y: e.pageY});
-      for(const char of affectedChars) {
-        movedChars.add(char);
-        const diffX = char.x - e.pageX;
-        const diffY = char.y - e.pageY;
-        const dist = Math.sqrt(diffX*diffX + diffY*diffY);
-        if(dist > 0) {
-          const pushFactor = Math.pow(searchRadius - (dist - char.radius), 0.9);
-          char.data.style.left = `${pushFactor*diffX/dist}px`;
-          char.data.style.top = `${pushFactor*diffY/dist}px`;
-        }
+      // Get mouse velocity
+      const now = performance.now();
+      if(!lastPos) {
+        lastPos = { x: e.pageX, y: e.pageY };
+        lastMouseMove = now;
       }
+      const deltaT = now - lastMouseMove;
+      lastMouseMove = now;
 
-      // Reset non-affected chars
-      for(const char of movedChars) {
-        if(!affectedChars.has(char)) {
-          char.data.style.left = "0";
-          char.data.style.top  = "0";
+      // Only move if time has elapsed
+      if(deltaT) {
+        const mouseVel = { x: (e.pageX - lastPos.x) / deltaT, y: (e.pageY - lastPos.y) / deltaT };
+        lastPos = { x: e.pageX, y: e.pageY };
+
+        // Search for affected chars
+        affectedChars = pocket.search(searchRadius, {x: e.pageX, y: e.pageY});
+        for(const char of affectedChars) {
+          movedChars.add(char);
+          const diffX = char.x - e.pageX;
+          const diffY = char.y - e.pageY;
+          const dist = Math.sqrt(diffX*diffX + diffY*diffY);
+          if(dist > 0) {
+            const pushFactor = 0.01*Math.pow(searchRadius - (dist - char.radius), 0.9);
+            char.data.vel.x += pushFactor * mouseVel.x;
+            char.data.vel.y += pushFactor * mouseVel.y;
+          }
         }
+
+        // Draw movements
+        startDrawing();
+
       }
 
       // Done moving
       moving = false;
-      // if(!drawing) draw();
     });
   }
 });
 
 let drawing = false;
+let lastDraw = 0;
+const startDrawing = () => {
+  if(!drawing) {
+    lastDraw = performance.now();
+    draw();
+  }
+}
 const draw = () => {
   drawing = true;
 
-  // Move chars towards origin
-  const charsToMove = [...movedChars];
-  for(const char of charsToMove) {
-    if(!affectedChars.has(char)) {
-      const x = parseFloat(char.data.style.left);
-      const y = parseFloat(char.data.style.top);
+  // Get time elapsed
+  const now = performance.now();
+  const deltaT = now - lastDraw
+  lastDraw = now;
+
+  if(deltaT > 0) {
+
+    // Move chars according to vel and origin
+    const charsToMove = [...movedChars];
+    for(const char of charsToMove) {
+      char.data.vel.x *= 0.9;
+      char.data.vel.y *= 0.9;
+      const x = (parseFloat(char.data.elem.style.left) || 0) + char.data.vel.x * deltaT;
+      const y = (parseFloat(char.data.elem.style.top) || 0) + char.data.vel.y * deltaT;
       if(Math.sqrt(x*x + y*y) < 1) {
-        char.data.style.left = '0';
-        char.data.style.top  = '0';
+        char.data.elem.style.left = '0';
+        char.data.elem.style.top  = '0';
+        char.data.vel = { x: 0, y: 0 };
         movedChars.delete(char);
       } else {
-        char.data.style.left = `${x*0.8}px`;
-        char.data.style.top  = `${y*0.8}px`;
+        char.data.elem.style.left = `${x*0.8}px`;
+        char.data.elem.style.top  = `${y*0.8}px`;
       }
     }
+
   }
 
   if(movedChars.size > 0) {
